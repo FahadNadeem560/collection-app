@@ -4,6 +4,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Collection App</title>
 
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+
 <style>
 html, body {
     height: 100%;
@@ -92,6 +96,58 @@ Increment:
 </div>
 
 <script>
+firebase.initializeApp(firebaseConfig);
+
+let db = firebase.database();
+let auth = firebase.auth();
+
+let role = "viewer";
+
+function login() {
+    let email = prompt("Email:");
+    let password = prompt("Password:");
+
+    auth.signInWithEmailAndPassword(email, password)
+    .then(() => {
+
+        db.ref("roles/" + email.replace(".", "_"))
+        .once("value")
+        .then(snap => {
+            role = snap.val() || "viewer";
+            alert("Logged in as " + role);
+            loadData();
+        });
+
+    })
+    .catch(() => alert("Login failed"));
+}
+
+function login() {
+    let email = prompt("Email:");
+    let password = prompt("Password:");
+
+    auth.signInWithEmailAndPassword(email, password)
+    .then(() => {
+
+        db.ref("roles/" + email.replace(".", "_"))
+        .once("value")
+        .then(snap => {
+            role = snap.val() || "viewer";
+            alert("Logged in as " + role);
+            loadData();
+        });
+
+    })
+    .catch(() => alert("Login failed"));
+}
+
+function save() {
+    if (role !== "admin") return;
+    db.ref("data").set(data);
+}
+
+btn.disabled = (role !== "admin");
+input.disabled = (role !== "admin");
 
 // ✅ YOUR NAMES
 let names = ["Fahad","Adeel","Salman","Haris","Hassan","Bilal","Saad lawai","Junaid","Waleed","Naveed","Ahad","Mujeeb","Haris.A","Bilal Gül","Y","Z"];
