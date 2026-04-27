@@ -2,33 +2,19 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Collection App</title>
+<title>Cloud Collection App</title>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <style>
-html, body {
-    height: 100%;
-    overflow-y: auto;
-}
-
-body {
-    font-family: Arial;
-    background:#f5f5f5;
-    padding:15px;
-    margin:0;
-}
-
+body { font-family: Arial; padding:15px; background:#f5f5f5; }
 h2 { text-align:center; }
-
-input, select {
-    padding:8px; margin:5px;
-}
 
 button {
     padding:10px;
+    margin:5px;
     border:none;
     border-radius:5px;
     cursor:pointer;
@@ -37,18 +23,10 @@ button {
 }
 
 .name-btn { background:#28a745; width:100%; }
-.reset { background:#dc3545; }
-
-.table-container {
-    overflow-x: auto;
-    max-height: 70vh; /* 👈 vertical scroll fix */
-    overflow-y: auto;
-    background:white;
-}
 
 table {
     width:100%;
-    min-width: 350px;
+    background:white;
     border-collapse:collapse;
 }
 
@@ -69,23 +47,16 @@ td, th {
 
 <body>
 
-<h2>💰 Collection App</h2>
+<h2>☁️ Cloud Collection App</h2>
 
-<div>
-User:
-<select id="userSelect"></select>
+<button onclick="login()">🔐 Login</button>
+<button onclick="logout()">🚪 Logout</button>
+
+<br>
 
 Increment:
 <input type="number" id="inc" value="5000">
 
-<button onclick="addUser()">+ User</button>
-</div>
-
-<button onclick="exportCSV()">📤 Export</button>
-<button class="reset" onclick="resetAll()">Reset</button>
-<button onclick="undo()">↩️ Undo</button>
-
-<div class="table-container">
 <table>
 <tr>
 <th>Name</th>
@@ -93,116 +64,74 @@ Increment:
 </tr>
 <tbody id="table"></tbody>
 </table>
-</div>
 
 <script>
+
+// 🔥 FIREBASE CONFIG (PUT YOUR OWN)
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+    projectId: "YOUR_PROJECT"
+};
+
 firebase.initializeApp(firebaseConfig);
 
-let db = firebase.database();
 let auth = firebase.auth();
+let db = firebase.database();
 
 let role = "viewer";
+let userEmail = null;
 
+let names = ["Fahad","Adeel","Salman","Haris","Hassan","Bilal","Saad lawai","Junaid","Waleed","Naveed","Ahad","Mujeeb","Haris.A","Bilal Gül","Y","Z"];
+
+let data = new Array(names.length).fill(0);
+
+// 🔐 LOGIN
 function login() {
     let email = prompt("Email:");
     let password = prompt("Password:");
 
     auth.signInWithEmailAndPassword(email, password)
-    .then(() => {
+    .then(user => {
+        userEmail = email;
 
-        db.ref("roles/" + email.replace(".", "_"))
-        .once("value")
+        let key = email.replace(/[@.]/g, "_");
+
+        db.ref("roles/" + key).once("value")
         .then(snap => {
             role = snap.val() || "viewer";
-            alert("Logged in as " + role);
-            loadData();
+            alert("Logged in as: " + role);
         });
 
+        listenData();
     })
-    .catch(() => alert("Login failed"));
+    .catch(err => alert("Login failed"));
 }
 
-function login() {
-    let email = prompt("Email:");
-    let password = prompt("Password:");
-
-    auth.signInWithEmailAndPassword(email, password)
-    .then(() => {
-
-        db.ref("roles/" + email.replace(".", "_"))
-        .once("value")
-        .then(snap => {
-            role = snap.val() || "viewer";
-            alert("Logged in as " + role);
-            loadData();
-        });
-
-    })
-    .catch(() => alert("Login failed"));
+// 🚪 LOGOUT
+function logout() {
+    auth.signOut();
+    location.reload();
 }
 
+// ☁️ REAL TIME DATA
+function listenData() {
+    db.ref("data").on("value", snap => {
+        if (snap.exists()) {
+            data = snap.val();
+        }
+        update();
+    });
+}
+
+// 💾 SAVE (admin only)
 function save() {
     if (role !== "admin") return;
     db.ref("data").set(data);
 }
 
-btn.disabled = (role !== "admin");
-input.disabled = (role !== "admin");
-
-// ✅ YOUR NAMES
-let names = ["Fahad","Adeel","Salman","Haris","Hassan","Bilal","Saad lawai","Junaid","Waleed","Naveed","Ahad","Mujeeb","Haris.A","Bilal Gül","Y","Z"];
-
-// DATA
-let data = JSON.parse(localStorage.getItem("data")) || {};
-let currentUser = localStorage.getItem("currentUser") || "Default";
-
-// UNDO
-let history = [];
-
-if (!data[currentUser]) data[currentUser] = new Array(names.length).fill(0);
-
-// SAVE
-function save() {
-    localStorage.setItem("data", JSON.stringify(data));
-    localStorage.setItem("currentUser", currentUser);
-}
-
-// LOAD USERS
-function loadUsers() {
-    let select = document.getElementById("userSelect");
-    select.innerHTML = "";
-
-    Object.keys(data).forEach(user => {
-        let opt = document.createElement("option");
-        opt.value = user;
-        opt.text = user;
-        if (user === currentUser) opt.selected = true;
-        select.appendChild(opt);
-    });
-
-    select.onchange = () => {
-        currentUser = select.value;
-        if (!data[currentUser]) {
-            data[currentUser] = new Array(names.length).fill(0);
-        }
-        update();
-    };
-}
-
-// ADD USER
-function addUser() {
-    let name = prompt("Enter user name:");
-    if (!name) return;
-
-    data[name] = new Array(names.length).fill(0);
-    currentUser = name;
-
-    save();
-    loadUsers();
-    update();
-}
-
-// UPDATE TABLE
+// 🖥 UPDATE UI
 function update() {
     let tbody = document.getElementById("table");
     tbody.innerHTML = "";
@@ -212,57 +141,49 @@ function update() {
     names.forEach((n, i) => {
         let row = document.createElement("tr");
 
+        // BUTTON
         let btn = document.createElement("button");
         btn.innerText = n;
         btn.className = "name-btn";
+        btn.disabled = (role !== "admin");
 
         btn.onclick = () => {
+            if (role !== "admin") return;
+
             let inc = parseInt(document.getElementById("inc").value) || 0;
-
-            history.push([...data[currentUser]]);
-
-            data[currentUser][i] += inc;
+            data[i] = (data[i] || 0) + inc;
 
             save();
-            update();
         };
 
         let td1 = document.createElement("td");
         td1.appendChild(btn);
 
+        // INPUT
         let input = document.createElement("input");
-        input.type = "text";
         input.className = "amount-input";
-        input.value = data[currentUser][i].toLocaleString();
-
-        input.onfocus = () => {
-            input.value = data[currentUser][i];
-        };
+        input.value = (data[i] || 0).toLocaleString();
+        input.disabled = (role !== "admin");
 
         input.onblur = () => {
-            let val = parseInt(input.value.replace(/,/g, "")) || 0;
+            if (role !== "admin") return;
 
-            history.push([...data[currentUser]]);
-
-            data[currentUser][i] = val;
-
+            data[i] = parseInt(input.value.replace(/,/g,"")) || 0;
             save();
-            update();
         };
 
         let td2 = document.createElement("td");
         td2.appendChild(input);
 
-        total += data[currentUser][i];
+        total += data[i] || 0;
 
         row.appendChild(td1);
         row.appendChild(td2);
-
         tbody.appendChild(row);
     });
 
     // TOTAL ROW
-    let totalRow = document.createElement("tr");
+    let tr = document.createElement("tr");
 
     let td1 = document.createElement("td");
     td1.innerText = "TOTAL";
@@ -272,49 +193,11 @@ function update() {
     td2.innerText = total.toLocaleString();
     td2.style.fontWeight = "bold";
 
-    totalRow.appendChild(td1);
-    totalRow.appendChild(td2);
+    tr.appendChild(td1);
+    tr.appendChild(td2);
 
-    tbody.appendChild(totalRow);
+    tbody.appendChild(tr);
 }
-
-// RESET
-function resetAll() {
-    if (confirm("Reset all values?")) {
-        history.push([...data[currentUser]]);
-        data[currentUser] = new Array(names.length).fill(0);
-        save();
-        update();
-    }
-}
-
-// UNDO
-function undo() {
-    if (history.length === 0) return;
-
-    data[currentUser] = history.pop();
-    save();
-    update();
-}
-
-// EXPORT
-function exportCSV() {
-    let csv = "Name,Amount\n";
-
-    names.forEach((n, i) => {
-        csv += `${n},${data[currentUser][i]}\n`;
-    });
-
-    let blob = new Blob([csv], { type: 'text/csv' });
-    let a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = currentUser + ".csv";
-    a.click();
-}
-
-// INIT
-loadUsers();
-update();
 
 </script>
 
