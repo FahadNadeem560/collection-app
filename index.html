@@ -24,8 +24,13 @@ button {
 .name-btn { background:#28a745; width:100%; }
 .reset { background:#dc3545; }
 
+.table-container {
+    overflow-x: auto; /* 👈 MOBILE FIX */
+}
+
 table {
     width:100%;
+    min-width: 350px; /* 👈 prevents squishing */
     background:white;
     border-collapse:collapse;
     margin-top:10px;
@@ -64,6 +69,7 @@ Increment:
 <button class="reset" onclick="resetAll()">Reset</button>
 <button onclick="undo()">↩️ Undo</button>
 
+<div class="table-container"> <!-- 👈 MOBILE FIX -->
 <table>
 <tr>
 <th>Name</th>
@@ -71,16 +77,18 @@ Increment:
 </tr>
 <tbody id="table"></tbody>
 </table>
+</div>
 
 <script>
-// 👇 CHANGE NAMES HERE
-let names = ["Fahad","Adeel","Salman","Haris","Hassan","Bilal.K","Saad Lawai","Junaid","Waleed","Naveed","Ahad","Naveed","Mujeeb","Haris.A","Bilal.G","X","Y"];
 
-// 👇 DATA
+// 👇 CHANGE NAMES HERE
+let names = ["Ali","Ahmed","Usman","Bilal","Hassan","Hussain","Saad","Zain","Omar","Hamza"];
+
+// DATA
 let data = JSON.parse(localStorage.getItem("data")) || {};
 let currentUser = localStorage.getItem("currentUser") || "Default";
 
-// 👇 UNDO
+// UNDO
 let history = [];
 
 if (!data[currentUser]) data[currentUser] = new Array(names.length).fill(0);
@@ -162,7 +170,7 @@ function update() {
         input.value = data[currentUser][i].toLocaleString();
 
         input.onfocus = () => {
-            input.value = data[currentUser][i]; // remove commas for editing
+            input.value = data[currentUser][i];
         };
 
         input.onblur = () => {
