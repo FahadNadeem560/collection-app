@@ -106,7 +106,10 @@ function login() {
 
         listenData();
     })
-    .catch(err => alert("Login failed"));
+    .catch(err => {
+    alert("Login failed: " + err.message);
+    console.log(err);
+});
 }
 
 // 🚪 LOGOUT
