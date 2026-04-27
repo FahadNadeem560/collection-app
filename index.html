@@ -51,8 +51,6 @@ td, th {
 
 <button onclick="login()">🔐 Login</button>
 <button onclick="logout()">🚪 Logout</button>
-<button onclick="undo()">↩️ Undo</button>
-<button onclick="resetAll()">🗑️ Reset</button>
 
 <br>
 
@@ -69,13 +67,13 @@ Increment:
 
 <script>
 
-// 🔥 FIREBASE CONFIG
+// 🔥 FIREBASE CONFIG (PUT YOUR OWN)
 const firebaseConfig = {
   apiKey: "AIzaSyB3I2-lTMIEUfQsSjd8Q0EuM2YgFYfoOpc",
   authDomain: "poker-score-live.firebaseapp.com",
   databaseURL: "https://poker-score-live-default-rtdb.firebaseio.com",
   projectId: "poker-score-live",
-  storageBucket: "poker-score-live.appspot.com",
+  storageBucket: "poker-score-live.firebasestorage.app",
   messagingSenderId: "673641455612",
   appId: "1:673641455612:web:560424d0ac779f95a05c79"
 };
@@ -83,6 +81,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 let auth = firebase.auth();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 let db = firebase.database();
 
 let role = "viewer";
@@ -91,9 +90,6 @@ let userEmail = null;
 let names = ["Fahad","Adeel","Salman","Haris","Hassan","Bilal","Saad lawai","Junaid","Waleed","Naveed","Ahad","Mujeeb","Haris.A","Bilal Gül","Y","Z"];
 
 let data = new Array(names.length).fill(0);
-
-// ✅ HISTORY FOR UNDO
-let history = [];
 
 // 🔐 LOGIN
 function login() {
@@ -115,9 +111,9 @@ function login() {
         listenData();
     })
     .catch(err => {
-        alert("Login failed: " + err.message);
-        console.log(err);
-    });
+    alert("Login failed: " + err.message);
+    console.log(err);
+});
 }
 
 // 🚪 LOGOUT
@@ -142,26 +138,6 @@ function save() {
     db.ref("data").set(data);
 }
 
-// ↩️ UNDO
-function undo() {
-    if (history.length === 0) return;
-
-    data = history.pop();
-    save();
-    update();
-}
-
-// 🗑️ RESET
-function resetAll() {
-    if (!confirm("Reset all values?")) return;
-
-    history.push([...data]);
-    data = new Array(names.length).fill(0);
-
-    save();
-    update();
-}
-
 // 🖥 UPDATE UI
 function update() {
     let tbody = document.getElementById("table");
@@ -181,13 +157,10 @@ function update() {
         btn.onclick = () => {
             if (role !== "admin") return;
 
-            history.push([...data]);
-
             let inc = parseInt(document.getElementById("inc").value) || 0;
             data[i] = (data[i] || 0) + inc;
 
             save();
-            update();
         };
 
         let td1 = document.createElement("td");
@@ -199,19 +172,11 @@ function update() {
         input.value = (data[i] || 0).toLocaleString();
         input.disabled = (role !== "admin");
 
-        input.onfocus = () => {
-            input.value = data[i] || 0;
-        };
-
         input.onblur = () => {
             if (role !== "admin") return;
 
-            history.push([...data]);
-
             data[i] = parseInt(input.value.replace(/,/g,"")) || 0;
-
             save();
-            update();
         };
 
         let td2 = document.createElement("td");
@@ -221,7 +186,6 @@ function update() {
 
         row.appendChild(td1);
         row.appendChild(td2);
-
         tbody.appendChild(row);
     });
 
