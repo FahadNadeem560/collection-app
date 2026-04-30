@@ -145,6 +145,11 @@ function save() {
 
 // ↩️ UNDO
 function undo() {
+    if (role !== "admin") {
+        alert("Only admin can undo");
+        return;
+    }
+
     if (history.length === 0) return;
 
     data = history.pop();
@@ -154,6 +159,11 @@ function undo() {
 
 // 🗑️ RESET
 function resetAll() {
+    if (role !== "admin") {
+        alert("Only admin can reset data");
+        return;
+    }
+
     if (!confirm("Reset all values?")) return;
 
     history.push([...data]);
