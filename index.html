@@ -107,13 +107,16 @@ function login() {
 
         let key = email.replace(/[@.]/g, "_");
 
+        // 🔥 FIRST get role
         db.ref("roles/" + key).once("value")
         .then(snap => {
             role = snap.val() || "viewer";
-            alert("Logged in as: " + role);
-        });
 
-        listenData();
+            alert("Logged in as: " + role);
+
+            // 🔥 THEN load data (VERY IMPORTANT)
+            listenData();
+        });
     })
     .catch(err => {
         alert("Login failed: " + err.message);
