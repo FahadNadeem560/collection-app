@@ -131,10 +131,19 @@ function logout() {
 }
 
 // 🚪 Sound
-function speakBuyIn(name) {
-    let msg = new SpeechSynthesisUtterance(name + " 5000");
-    msg.lang = "en-US";
-    msg.rate = 1;
+function playChipSound() {
+    let audio = new Audio("https://actions.google.com/sounds/v1/money/coins_dropping.ogg");
+    audio.play();
+}
+
+function speakTotalUrdu(name, total) {
+    let msg = new SpeechSynthesisUtterance(name +  total);
+    
+    // Urdu / Hindi style voice if available
+    msg.lang = "ur-PK";
+    msg.rate = 0.9;
+    msg.pitch = 1;
+
     window.speechSynthesis.speak(msg);
 }
 
@@ -208,10 +217,12 @@ function update() {
             let inc = parseInt(document.getElementById("inc").value) || 0;
             data[i] = (data[i] || 0) + inc;
 
-	    speakBuyIn(n);
+// chip sound + voice
+playChipSound();
+speakTotalUrdu(n, data[i]);
 
-            save();
-            update();
+save();
+update();
         };
 
         let td1 = document.createElement("td");
