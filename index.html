@@ -132,7 +132,7 @@ function logout() {
 
 // 🚪 Sound
 function speakBuyIn(name) {
-    let msg = new SpeechSynthesisUtterance(name + " buying added 5000");
+    let msg = new SpeechSynthesisUtterance(name + " 5000");
     msg.lang = "en-US";
     msg.rate = 1;
     window.speechSynthesis.speak(msg);
@@ -207,6 +207,8 @@ function update() {
 
             let inc = parseInt(document.getElementById("inc").value) || 0;
             data[i] = (data[i] || 0) + inc;
+
+	    speakBuyIn(n);
 
             save();
             update();
