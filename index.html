@@ -130,6 +130,14 @@ function logout() {
     location.reload();
 }
 
+// 🚪 Sound
+function speakBuyIn(name) {
+    let msg = new SpeechSynthesisUtterance(name + " buying added 5000");
+    msg.lang = "en-US";
+    msg.rate = 1;
+    window.speechSynthesis.speak(msg);
+}
+
 // ☁️ REAL TIME DATA
 function listenData() {
     db.ref("data").on("value", snap => {
