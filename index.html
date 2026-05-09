@@ -53,6 +53,17 @@ td, th {
 <button onclick="logout()">🚪 Logout</button>
 <button onclick="undo()">↩️ Undo</button>
 <button onclick="resetAll()">🗑️ Reset</button>
+<button onclick="closing()">🏁 Closing</button>
+<button onclick="saveGame()">💾 Save Game</button>
+<button onclick="showStats()">📊 Stats</button>
+<button onclick="showLeaderboard()">🏆 Leaderboard</button>
+<button onclick="showMonthlyStats()">📅 Monthly Stats</button>
+<button onclick="showYearlyStats()">📆 Yearly Stats</button>
+
+<div id="expenseBox" style="display:none; margin-top:10px;">
+    Expense:
+    <input type="number" id="expenseInput" value="18500">
+</div>
 
 <br>
 
@@ -60,7 +71,7 @@ Increment:
 <input type="number" id="inc" value="5000">
 
 <table>
-<tr>
+<tr id="headerRow">
 <th>Name</th>
 <th>Amount</th>
 </tr>
@@ -89,12 +100,14 @@ let db = firebase.database();
 let role = "viewer";
 let userEmail = null;
 
-let names = ["Fahad","Adeel","Salman","Haris","Hassan","Bilal","Saad lawai","Junaid","Waleed","Naveed","Ahad","Mujeeb","Haris.A","Bilal Gül","Y","Z"];
+let names = ["Fahad","Adeel","Salman","Haris","Hassan","Bilal","Saad lawai","Junaid","Waleed","Naveed","Ahad","Mujeeb","Haris A","Bilal Gül","Y","Z"];
 
 let data = new Array(names.length).fill(0);
 
 // ✅ HISTORY FOR UNDO
 let history = [];
+let closingMode = false;
+let chipCounts = new Array(names.length).fill(0);
 
 // 🔐 LOGIN
 function login() {
@@ -124,6 +137,24 @@ function login() {
     });
 }
 
+auth.onAuthStateChanged(user => {
+    if (user) {
+
+        userEmail = user.email.toLowerCase();
+
+        let key = userEmail.replace(/[@.]/g, "_");
+
+        db.ref("roles/" + key).once("value")
+        .then(snap => {
+
+            role = snap.val() || "viewer";
+
+            listenData();
+            update();
+        });
+    }
+});
+
 // 🚪 LOGOUT
 function logout() {
     auth.signOut();
@@ -136,15 +167,308 @@ function playChipSound() {
     audio.play();
 }
 
-function speakTotalUrdu(name, total) {
-    let msg = new SpeechSynthesisUtterance(name +  total);
-    
-    // Urdu / Hindi style voice if available
-    msg.lang = "ur-PK";
-    msg.rate = 0.9;
-    msg.pitch = 1;
-
+function speakTotal(name, total) {
+    let msg = new SpeechSynthesisUtterance(name + " total " + total);
+    msg.lang = "en-US";
+    msg.rate = 1;
     window.speechSynthesis.speak(msg);
+}
+// Calculate Loss
+
+function mround(value, multiple) {
+    return Math.round(value / multiple) * multiple;
+}
+
+function calculateLoss(i) {
+    let expense = parseInt(document.getElementById("expenseInput")?.value || 18500) || 0;
+
+    let totalBuying = data.reduce((a, b) => a + (b || 0), 0);
+    let totalChips = chipCounts.reduce((a, b) => a + (b || 0), 0);
+
+    if (totalChips === 0) return 0;
+
+    let expenseRatio = expense / totalChips;
+
+    let payable = [];
+    let baseLoss = [];
+
+    for (let x = 0; x < names.length; x++) {
+        let buying = data[x] || 0;
+        let chips = chipCounts[x] || 0;
+
+        let afterDeduction = chips * (1 - expenseRatio);
+
+        payable[x] = mround(Math.max(0, Math.min(buying, afterDeduction)), 100);
+        baseLoss[x] = buying - payable[x];
+    }
+
+    let totalPayable = payable.reduce((a, b) => a + b, 0);
+    let totalBaseLoss = baseLoss.reduce((a, b) => a + b, 0);
+
+    if (totalBaseLoss === 0) return 0;
+
+    let remainingPool = totalBuying - totalPayable - expense;
+
+    let lossDistribution = mround(remainingPool * (baseLoss[i] / totalBaseLoss), 100);
+
+    let finalPayable = payable[i] + lossDistribution;
+
+    let dayLoss = (data[i] || 0) - finalPayable;
+
+    return Math.round(dayLoss);
+}
+
+function saveGame() {
+    if (role !== "admin") {
+        alert("Only admin can save game");
+        return;
+    }
+
+    let today = new Date().toISOString().split("T")[0];
+    let expense = parseInt(document.getElementById("expenseInput")?.value || 0) || 0;
+
+    let gameData = {
+        date: today,
+        expense: expense,
+        players: {}
+    };
+
+    names.forEach((name, i) => {
+        let loss = calculateLoss(i);
+
+        gameData.players[name] = {
+            loss: loss
+        };
+    });
+
+    db.ref("games/" + today).set(gameData);
+
+    names.forEach((name, i) => {
+        let loss = calculateLoss(i);
+
+        let ref = db.ref("stats/" + name);
+
+        ref.once("value").then(snap => {
+            let s = snap.val() || {
+                games: 0,
+                totalLoss: 0,
+                highestLoss: 0
+            };
+
+            s.games += 1;
+            s.totalLoss += loss;
+            s.highestLoss = Math.max(s.highestLoss, loss);
+            s.averageLoss = Math.round(s.totalLoss / s.games);
+
+            ref.set(s);
+        });
+    });
+
+    alert("Game saved as " + today);
+}
+
+function showStats() {
+
+    Promise.all([
+        db.ref("yearlyStats").once("value"),
+        db.ref("games").once("value")
+    ]).then(([yearSnap, gameSnap]) => {
+
+        let yearly = yearSnap.val() || {};
+        let games = gameSnap.val() || {};
+
+        let stats = {};
+
+        // 🔥 HISTORICAL YEARLY DATA
+        Object.keys(yearly).forEach(year => {
+
+            Object.keys(yearly[year]).forEach(name => {
+
+                let loss = yearly[year][name] || 0;
+
+                if (!stats[name]) {
+                    stats[name] = {
+                        years: 0,
+                        totalLoss: 0,
+                        highestLoss: 0
+                    };
+                }
+
+                stats[name].years += 1;
+                stats[name].totalLoss += loss;
+                stats[name].highestLoss = Math.max(stats[name].highestLoss, loss);
+            });
+        });
+
+        // 🔥 NEW SAVED GAMES
+        Object.keys(games).forEach(date => {
+
+            let players = games[date].players || {};
+
+            Object.keys(players).forEach(name => {
+
+                let loss = players[name].loss || 0;
+
+                if (!stats[name]) {
+                    stats[name] = {
+                        years: 0,
+                        totalLoss: 0,
+                        highestLoss: 0
+                    };
+                }
+
+                stats[name].totalLoss += loss;
+                stats[name].highestLoss = Math.max(stats[name].highestLoss, loss);
+            });
+        });
+
+        let text = "PLAYER STATS\n\n";
+
+        Object.keys(stats).forEach(name => {
+
+            let s = stats[name];
+
+            text += name + "\n";
+            text += "Years Tracked: " + s.years + "\n";
+            text += "All Time Loss: " + s.totalLoss.toLocaleString() + "\n";
+            text += "Highest Annual Loss: " + s.highestLoss.toLocaleString() + "\n\n";
+        });
+
+        alert(text);
+
+    });
+}
+
+function showLeaderboard() {
+    db.ref("stats").once("value").then(snap => {
+        let stats = snap.val();
+
+        if (!stats) {
+            alert("No stats saved yet");
+            return;
+        }
+
+        let list = Object.keys(stats).map(name => ({
+            name: name,
+            totalLoss: stats[name].totalLoss || 0
+        }));
+
+        list.sort((a, b) => b.totalLoss - a.totalLoss);
+
+        let text = "🏆 LOSS LEADERBOARD\n\n";
+
+        list.forEach((p, index) => {
+            text += (index + 1) + ". " + p.name + " - " + p.totalLoss.toLocaleString() + "\n";
+        });
+
+        alert(text);
+    });
+}
+
+function showMonthlyStats() {
+    let month = prompt("Enter month in format YYYY-MM, example: 2026-05");
+    if (!month) return;
+
+    db.ref("games").once("value").then(snap => {
+        let games = snap.val();
+
+        if (!games) {
+            alert("No games saved yet");
+            return;
+        }
+
+        let monthly = {};
+
+        Object.keys(games).forEach(date => {
+            if (!date.startsWith(month)) return;
+
+            let players = games[date].players || {};
+
+            Object.keys(players).forEach(name => {
+                if (!monthly[name]) {
+                    monthly[name] = {
+                        games: 0,
+                        totalLoss: 0,
+                        highestLoss: 0
+                    };
+                }
+
+                let loss = players[name].loss || 0;
+
+                monthly[name].games += 1;
+                monthly[name].totalLoss += loss;
+                monthly[name].highestLoss = Math.max(monthly[name].highestLoss, loss);
+            });
+        });
+
+        let text = "📅 MONTHLY STATS " + month + "\n\n";
+
+        Object.keys(monthly).forEach(name => {
+            let s = monthly[name];
+            let avg = Math.round(s.totalLoss / s.games);
+
+            text += name + "\n";
+            text += "Games: " + s.games + "\n";
+            text += "Total Loss: " + s.totalLoss.toLocaleString() + "\n";
+            text += "Average Loss: " + avg.toLocaleString() + "\n";
+            text += "Highest Loss: " + s.highestLoss.toLocaleString() + "\n\n";
+        });
+
+        alert(text);
+    });
+}
+
+function showYearlyStats() {
+    let year = prompt("Enter year, example: 2026");
+    if (!year) return;
+
+    db.ref("games").once("value").then(snap => {
+        let games = snap.val();
+
+        if (!games) {
+            alert("No games saved yet");
+            return;
+        }
+
+        let yearly = {};
+
+        Object.keys(games).forEach(date => {
+            if (!date.startsWith(year)) return;
+
+            let players = games[date].players || {};
+
+            Object.keys(players).forEach(name => {
+                if (!yearly[name]) {
+                    yearly[name] = {
+                        games: 0,
+                        totalLoss: 0,
+                        highestLoss: 0
+                    };
+                }
+
+                let loss = players[name].loss || 0;
+
+                yearly[name].games += 1;
+                yearly[name].totalLoss += loss;
+                yearly[name].highestLoss = Math.max(yearly[name].highestLoss, loss);
+            });
+        });
+
+        let text = "📆 YEARLY STATS " + year + "\n\n";
+
+        Object.keys(yearly).forEach(name => {
+            let s = yearly[name];
+            let avg = Math.round(s.totalLoss / s.games);
+
+            text += name + "\n";
+            text += "Games: " + s.games + "\n";
+            text += "Total Loss: " + s.totalLoss.toLocaleString() + "\n";
+            text += "Average Loss: " + avg.toLocaleString() + "\n";
+            text += "Highest Loss: " + s.highestLoss.toLocaleString() + "\n\n";
+        });
+
+        alert(text);
+    });
 }
 
 // ☁️ REAL TIME DATA
@@ -193,9 +517,29 @@ function resetAll() {
     update();
 }
 
+function closing() {
+    if (role !== "admin") {
+        alert("Only admin can close");
+        return;
+    }
+
+    closingMode = true;
+    document.getElementById("expenseBox").style.display = "block";
+    update();
+}
+
+
+
 // 🖥 UPDATE UI
 function update() {
-    let tbody = document.getElementById("table");
+let headerRow = document.getElementById("headerRow");
+
+headerRow.innerHTML = "<th>Name</th><th>Amount</th>";
+
+if (closingMode) {
+    headerRow.innerHTML += "<th>Chip Count</th><th>Loss</th>";
+}    
+let tbody = document.getElementById("table");
     tbody.innerHTML = "";
 
     let total = 0;
@@ -215,14 +559,12 @@ function update() {
             history.push([...data]);
 
             let inc = parseInt(document.getElementById("inc").value) || 0;
-            data[i] = (data[i] || 0) + inc;
+          data[i] = (data[i] || 0) + inc;
 
-// chip sound + voice
-playChipSound();
-speakTotalUrdu(n, data[i]);
+	  speakTotal(n, data[i]);
 
-save();
-update();
+	  save();
+	  update();
         };
 
         let td1 = document.createElement("td");
@@ -255,9 +597,34 @@ update();
         total += data[i] || 0;
 
         row.appendChild(td1);
-        row.appendChild(td2);
+row.appendChild(td2);
 
-        tbody.appendChild(row);
+// 🔥 ADD THIS BLOCK HERE
+if (closingMode) {
+
+    // Chip Count
+    let chipInput = document.createElement("input");
+    chipInput.value = chipCounts[i] || "";
+    chipInput.disabled = (role !== "admin");
+
+    chipInput.onblur = () => {
+        chipCounts[i] = parseInt(chipInput.value) || 0;
+        update();
+    };
+
+    let td3 = document.createElement("td");
+    td3.appendChild(chipInput);
+
+    // Loss (auto)
+    let td4 = document.createElement("td");
+    td4.innerText = calculateLoss(i).toLocaleString();
+
+    row.appendChild(td3);
+    row.appendChild(td4);
+}
+
+tbody.appendChild(row);
+
     });
 
     // TOTAL ROW
