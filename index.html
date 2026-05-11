@@ -7,6 +7,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <style>
 body { font-family: Arial; padding:15px; background:#f5f5f5; }
@@ -46,6 +47,8 @@ td, th {
 </head>
 
 <body>
+
+<div id="captureArea">
 
 <h2>Poker Buying</h2>
 
@@ -167,12 +170,34 @@ function playChipSound() {
     audio.play();
 }
 
-function speakTotal(name, total) {
-    let msg = new SpeechSynthesisUtterance(name + " total " + total);
+function speakTotalUrdu(name, total) {
+
+    let text = name + total ;
+
+    let msg = new SpeechSynthesisUtterance(text);
+
     msg.lang = "en-US";
-    msg.rate = 1;
+    msg.rate = 0.95;
+    msg.pitch = 1.4; // sweeter female tone
+
+    let voices = window.speechSynthesis.getVoices();
+
+    // try to select female voice
+    let femaleVoice =
+        voices.find(v => v.name.toLowerCase().includes("female")) ||
+        voices.find(v => v.name.toLowerCase().includes("zira")) ||
+        voices.find(v => v.name.toLowerCase().includes("samantha")) ||
+        voices.find(v => v.name.toLowerCase().includes("google us english")) ||
+        voices[0];
+
+    if (femaleVoice) {
+        msg.voice = femaleVoice;
+    }
+
     window.speechSynthesis.speak(msg);
 }
+
+
 // Calculate Loss
 
 function mround(value, multiple) {
@@ -224,6 +249,13 @@ function saveGame() {
         return;
     }
 
+    if (!closingMode) {
+        alert("Please press Closing first");
+        return;
+    }
+
+    if (!confirm("Are you sure you want to save and close today's game?")) return;
+
     let today = new Date().toISOString().split("T")[0];
     let expense = parseInt(document.getElementById("expenseInput")?.value || 0) || 0;
 
@@ -234,37 +266,60 @@ function saveGame() {
     };
 
     names.forEach((name, i) => {
-        let loss = calculateLoss(i);
-
         gameData.players[name] = {
-            loss: loss
+            buying: data[i] || 0,
+            chipCount: chipCounts[i] || 0,
+            loss: calculateLoss(i)
         };
     });
 
-    db.ref("games/" + today).set(gameData);
+    // saves only one file per day. If saved again, it replaces same date.
+    db.ref("games/" + today).set(gameData).then(() => {
+        downloadScreenshot(today);
 
-    names.forEach((name, i) => {
-        let loss = calculateLoss(i);
+        data = new Array(names.length).fill(0);
+        chipCounts = new Array(names.length).fill(0);
+        closingMode = false;
 
-        let ref = db.ref("stats/" + name);
+        document.getElementById("expenseBox").style.display = "none";
 
-        ref.once("value").then(snap => {
-            let s = snap.val() || {
-                games: 0,
-                totalLoss: 0,
-                highestLoss: 0
-            };
+        save();
+        update();
 
-            s.games += 1;
-            s.totalLoss += loss;
-            s.highestLoss = Math.max(s.highestLoss, loss);
-            s.averageLoss = Math.round(s.totalLoss / s.games);
-
-            ref.set(s);
-        });
+        alert("Game saved as " + today);
     });
+}
 
-    alert("Game saved as " + today);
+function downloadScreenshot(fileName) {
+
+    let area = document.getElementById("captureArea");
+
+    // temporary styling for screenshot fit
+    let oldWidth = area.style.width;
+    let oldTransform = area.style.transform;
+    let oldBackground = document.body.style.background;
+
+    document.body.style.background = "white";
+
+    area.style.width = "900px";
+    area.style.transform = "scale(1)";
+    area.style.transformOrigin = "top left";
+
+    html2canvas(area, {
+        scale: 2,
+        useCORS: true
+    }).then(canvas => {
+
+        let link = document.createElement("a");
+        link.download = fileName + ".png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+
+        // restore styles
+        area.style.width = oldWidth;
+        area.style.transform = oldTransform;
+        document.body.style.background = oldBackground;
+    });
 }
 
 function showStats() {
@@ -543,6 +598,8 @@ let tbody = document.getElementById("table");
     tbody.innerHTML = "";
 
     let total = 0;
+let totalChips = 0;
+let totalLoss = 0;
 
     names.forEach((n, i) => {
         let row = document.createElement("tr");
@@ -595,6 +652,10 @@ let tbody = document.getElementById("table");
         td2.appendChild(input);
 
         total += data[i] || 0;
+if (closingMode) {
+    totalChips += chipCounts[i] || 0;
+    totalLoss += calculateLoss(i);
+}
 
         row.appendChild(td1);
 row.appendChild(td2);
@@ -627,24 +688,37 @@ tbody.appendChild(row);
 
     });
 
-    // TOTAL ROW
-    let tr = document.createElement("tr");
+// TOTAL ROW
+let tr = document.createElement("tr");
 
-    let td1 = document.createElement("td");
-    td1.innerText = "TOTAL";
-    td1.style.fontWeight = "bold";
+let td1 = document.createElement("td");
+td1.innerText = "TOTAL";
+td1.style.fontWeight = "bold";
 
-    let td2 = document.createElement("td");
-    td2.innerText = total.toLocaleString();
-    td2.style.fontWeight = "bold";
+let td2 = document.createElement("td");
+td2.innerText = total.toLocaleString();
+td2.style.fontWeight = "bold";
 
-    tr.appendChild(td1);
-    tr.appendChild(td2);
+tr.appendChild(td1);
+tr.appendChild(td2);
 
-    tbody.appendChild(tr);
+if (closingMode) {
+    let td3 = document.createElement("td");
+    td3.innerText = totalChips.toLocaleString();
+    td3.style.fontWeight = "bold";
+
+    let td4 = document.createElement("td");
+    td4.innerText = totalLoss.toLocaleString();
+    td4.style.fontWeight = "bold";
+
+    tr.appendChild(td3);
+    tr.appendChild(td4);
+}
+
+tbody.appendChild(tr);
 }
 
 </script>
-
+</div>
 </body>
 </html>
