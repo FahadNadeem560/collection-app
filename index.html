@@ -172,7 +172,7 @@ function playChipSound() {
 
 function speakTotalUrdu(name, total) {
 
-    let text = name + total ;
+    let text = name + " total " + total ;
 
     let msg = new SpeechSynthesisUtterance(text);
 
@@ -618,7 +618,8 @@ let totalLoss = 0;
             let inc = parseInt(document.getElementById("inc").value) || 0;
           data[i] = (data[i] || 0) + inc;
 
-	  speakTotal(n, data[i]);
+	  playChipSound();
+speakTotalUrdu(n, data[i]);
 
 	  save();
 	  update();
